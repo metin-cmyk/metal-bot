@@ -1,6 +1,8 @@
 """
-Haber için 1080x1080 Instagram görseli oluşturur.
-Orijinal görsel varsa kullanır, yoksa siyah-kırmızı metal şablon yapar.
+Haber görseli oluşturur.
+- Haberin orijinal fotoğrafını arkaya koyar
+- therockula-post-overlay.png yi üstüne bindirir
+- Sol üste kategori, sol alta başlık yazar
 """
 
 import os
@@ -8,6 +10,7 @@ import re
 import time
 import textwrap
 import requests
+import numpy as np
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont, ImageEnhance
 from io import BytesIO
@@ -17,20 +20,23 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 SIZE = (1080, 1080)
 
+OVERLAY_PATH = Path("therockula-post-overlay.png")
+FONT_PATH    = Path("fonts/BarlowCondensed-SemiBold.ttf")
+
 CATEGORY_LABELS = {
     "turkey_concert": "TR KONSER",
-    "release":        "YENİ ÇIKIŞ",
+    "release":        "YENI CIKIS",
     "concert":        "KONSER",
     "general":        "METAL HABER",
 }
 
-def _font(size, bold=False):
-    paths = [
-        f"/usr/share/fonts/truetype/dejavu/DejaVuSans{'-Bold' if bold else ''}.ttf",
-        f"/usr/share/fonts/truetype/liberation/LiberationSans-{'Bold' if bold else 'Regular'}.ttf",
-        f"/usr/share/fonts/truetype/freefont/FreeSans{'Bold' if bold else ''}.ttf",
-    ]
-    for p in paths:
+def _font(size):
+    if FONT_PATH.exists():
+        return ImageFont.truetype(str(FONT_PATH), size)
+    for p in [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ]:
         if Path(p).exists():
             return ImageFont.truetype(p, size)
     return ImageFont.load_default()
@@ -45,61 +51,54 @@ def _fetch_image(url):
     except:
         return None
 
+def _prepare_bg(photo):
+    w, h = photo.size
+    s = min(w, h)
+    img = photo.crop(((w-s)//2, (h-s)//2, (w+s)//2, (h+s)//2))
+    img = img.resize(SIZE, Image.LANCZOS)
+    img = ImageEnhance.Brightness(img).enhance(0.7)
+    return img
+
+def _blend(bg, overlay):
+    ov     = overlay.convert("RGB").resize(SIZE, Image.LANCZOS)
+    ov_arr = np.array(ov).astype(float)
+    bg_arr = np.array(bg).astype(float)
+    lum    = (ov_arr[:,:,0]*0.299 + ov_arr[:,:,1]*0.587 + ov_arr[:,:,2]*0.114) / 255.0
+    lum    = lum[:,:,np.newaxis]
+    out    = bg_arr * (1 - lum) + ov_arr * lum
+    return Image.fromarray(out.astype(np.uint8))
+
 def create_image(news_item: dict) -> Path:
-    base = _fetch_image(news_item.get("image_url"))
+    photo = _fetch_image(news_item.get("image_url"))
+    bg    = _prepare_bg(photo) if photo else Image.new("RGB", SIZE, (8, 8, 8))
 
-    if base:
-        w, h = base.size
-        s = min(w, h)
-        img = base.crop(((w-s)//2, (h-s)//2, (w+s)//2, (h+s)//2))
-        img = img.resize(SIZE, Image.LANCZOS)
-        img = ImageEnhance.Brightness(img).enhance(0.45)
+    if OVERLAY_PATH.exists():
+        result = _blend(bg, Image.open(OVERLAY_PATH))
     else:
-        img = Image.new("RGB", SIZE, (10, 10, 10))
-        draw = ImageDraw.Draw(img)
-        for i in range(6):
-            y = 80 + i * 160
-            draw.rectangle([0, y, SIZE[0], y+2], fill=(160, 15, 15))
-        draw.rectangle([0, 0, SIZE[0], 6], fill=(200, 20, 20))
-        draw.rectangle([0, SIZE[1]-6, SIZE[0], SIZE[1]], fill=(200, 20, 20))
+        result = bg
 
-    draw = ImageDraw.Draw(img, "RGBA")
-
-    # Alt karartma
-    for i in range(500):
-        a = int(210 * (i / 500))
-        draw.rectangle([0, SIZE[1]-500+i, SIZE[0], SIZE[1]-500+i+1], fill=(0, 0, 0, a))
-
-    # Kategori etiketi
+    draw     = ImageDraw.Draw(result)
     category = news_item.get("category", "general")
-    label = CATEGORY_LABELS.get(category, "METAL HABER")
-    f_label = _font(34, bold=True)
-    bbox = draw.textbbox((50, 50), label, font=f_label)
-    draw.rectangle([bbox[0]-14, bbox[1]-10, bbox[2]+14, bbox[3]+10], fill=(190, 15, 15))
-    draw.text((50, 50), label, font=f_label, fill=(240, 240, 240))
+    label    = CATEGORY_LABELS.get(category, "METAL HABER")
+    title    = news_item.get("title", "")
 
-    # Ana başlık
-    f_title = _font(54, bold=True)
-    wrapped = textwrap.fill(news_item["title"], width=26)
-    lines = wrapped.split("\n")
-    y = SIZE[1] - len(lines) * 68 - 90
+    # Kategori etiketi - sol ust
+    f_cat = _font(60)
+    bbox  = draw.textbbox((50, 50), label, font=f_cat)
+    draw.rectangle([bbox[0]-12, bbox[1]-8, bbox[2]+12, bbox[3]+8], fill=(200, 20, 20))
+    draw.text((50, 50), label, font=f_cat, fill=(255, 255, 255))
+
+    # Baslik - sol alt (THE ROCKULA in ustune cikmasin, max y=880)
+    f_title = _font(48)
+    line_h  = 58
+    lines   = textwrap.fill(title, width=30).split("\n")[:6]
+    y       = 880 - len(lines) * line_h
     for line in lines:
         draw.text((52, y+2), line, font=f_title, fill=(0, 0, 0))
-        draw.text((50, y),   line, font=f_title, fill=(240, 240, 240))
-        y += 68
+        draw.text((50, y),   line, font=f_title, fill=(255, 255, 255))
+        y += line_h
 
-    # Kaynak
-    f_src = _font(28)
-    draw.text((50, SIZE[1]-55), f"via {news_item['source']}", font=f_src, fill=(160, 160, 160))
-
-    # Hesap adı
-    handle = os.getenv("IG_HANDLE", "@therockula")
-    f_hdl = _font(30, bold=True)
-    bbox2 = draw.textbbox((0, 0), handle, font=f_hdl)
-    tx = SIZE[0] - (bbox2[2]-bbox2[0]) - 50
-    draw.text((tx, SIZE[1]-55), handle, font=f_hdl, fill=(210, 30, 30))
-
-    name = re.sub(r"[^a-z0-9]", "_", news_item["title"].lower())[:40]
-    path = OUTPUT_DIR / f"{name}_{int(time.time())}.jpg"
-    img.save(path, "JPEG", quality=92)
+    safe = re.sub(r"[^a-z0-9]", "_", title.lower())[:40]
+    path = OUTPUT_DIR / f"{safe}_{int(time.time())}.jpg"
+    result.save(path, "JPEG", quality=92)
     return path
