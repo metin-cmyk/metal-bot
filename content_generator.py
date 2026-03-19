@@ -3,8 +3,6 @@
 import os
 import anthropic
 
-client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-
 CATEGORY_LABELS = {
     "turkey_concert": "🇹🇷 TÜRKİYE KONSER",
     "release":        "🎵 YENİ ÇIKIŞ",
@@ -13,6 +11,7 @@ CATEGORY_LABELS = {
 }
 
 def generate_caption(news_item: dict) -> str:
+    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     category = news_item.get("category", "general")
 
     system = """Sen bir Metal/Rock Instagram hesabının içerik yazarısın.
