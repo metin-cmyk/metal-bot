@@ -1,8 +1,10 @@
 """
 Haber gorseli olusturur.
-- Haberin orijinal fotografini arkaya koyar
-- therockula-post-overlay.png yi ustune bindirir
-- Sol uste kategori (60pt), sol alta baslik (30pt) Barlow Condensed SemiBold
+- Haberin fotografini arkaya koyar (blend ile)
+- Overlay ustune bindirilir
+- Sol uste kategori (45pt, kirmizi kutu yok)
+- Sol altta baslik EN (30pt Bold) + TR ozet (30pt Regular)
+- THE ROCKULA logosunun ustune cikmaz
 """
 
 import os
@@ -20,20 +22,21 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 SIZE = (1080, 1080)
 
-# Font ve overlay ana klasorde
-OVERLAY_PATH = Path("therockula-post-overlay.png")
-FONT_PATH    = Path("BarlowCondensed-SemiBold.ttf")
+OVERLAY_PATH   = Path("therockula-post-overlay.png")
+FONT_BOLD_PATH = Path("BarlowCondensed-SemiBold.ttf")
+FONT_REG_PATH  = Path("BarlowCondensed-Regular.ttf")
 
 CATEGORY_LABELS = {
-    "turkey_concert": "TR KONSER",
+    "turkey_concert": "KONSER",
     "release":        "YENI CIKIS",
     "concert":        "KONSER",
     "general":        "METAL HABER",
 }
 
-def _font(size):
-    if FONT_PATH.exists():
-        return ImageFont.truetype(str(FONT_PATH), size)
+def _font(size, bold=True):
+    path = FONT_BOLD_PATH if bold else FONT_REG_PATH
+    if path.exists():
+        return ImageFont.truetype(str(path), size)
     for p in [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
@@ -57,26 +60,32 @@ def _prepare_bg(photo):
     s = min(w, h)
     img = photo.crop(((w-s)//2, (h-s)//2, (w+s)//2, (h+s)//2))
     img = img.resize(SIZE, Image.LANCZOS)
-    img = ImageEnhance.Brightness(img).enhance(0.7)
+    img = ImageEnhance.Brightness(img).enhance(0.65)
     return img
 
 def _blend(bg, overlay):
+    """
+    Screen blend: overlay'in parlak alanlari (ates) one cikiyor,
+    karanlik merkez transparan gibi davranip arkaplanı gosteriyor.
+    """
     ov     = overlay.convert("RGB").resize(SIZE, Image.LANCZOS)
-    ov_arr = np.array(ov).astype(float)
-    bg_arr = np.array(bg).astype(float)
-    lum    = (ov_arr[:,:,0]*0.299 + ov_arr[:,:,1]*0.587 + ov_arr[:,:,2]*0.114) / 255.0
-    lum    = lum[:,:, np.newaxis]
-    out    = bg_arr * (1 - lum) + ov_arr * lum
-    return Image.fromarray(out.astype(np.uint8))
+    ov_arr = np.array(ov).astype(float) / 255.0
+    bg_arr = np.array(bg).astype(float) / 255.0
+
+    # Screen blend modu: 1 - (1-a)*(1-b)
+    out = 1.0 - (1.0 - bg_arr) * (1.0 - ov_arr)
+    out = np.clip(out * 255, 0, 255).astype(np.uint8)
+    return Image.fromarray(out)
 
 def create_image(news_item: dict) -> Path:
     # 1. Arkaplan
     photo = _fetch_image(news_item.get("image_url"))
-    bg    = _prepare_bg(photo) if photo else Image.new("RGB", SIZE, (8, 8, 8))
+    bg    = _prepare_bg(photo) if photo else Image.new("RGB", SIZE, (15, 15, 15))
 
-    # 2. Overlay bindirme
+    # 2. Overlay (screen blend)
     if OVERLAY_PATH.exists():
-        result = _blend(bg, Image.open(OVERLAY_PATH))
+        overlay = Image.open(OVERLAY_PATH).convert("RGB")
+        result  = _blend(bg, overlay)
     else:
         result = bg
 
@@ -84,31 +93,50 @@ def create_image(news_item: dict) -> Path:
     category = news_item.get("category", "general")
     label    = CATEGORY_LABELS.get(category, "METAL HABER")
     title    = news_item.get("title", "")
+    summary  = news_item.get("summary", "")
 
-    # Piksel cinsinden pt -> px (96 dpi: 1pt = 1.333px)
-    # 60pt = 80px, 30pt = 40px
-    f_cat   = _font(80)   # 60pt
-    f_title = _font(40)   # 30pt
+    # pt -> px (96dpi): 45pt=60px, 30pt=40px
+    f_cat   = _font(60, bold=True)    # 45pt kategori
+    f_title = _font(40, bold=True)    # 30pt baslik (bold)
+    f_tr    = _font(40, bold=False)   # 30pt Turkce ozet (regular)
 
-    # Sol ust - kategori etiketi
-    pad_x, pad_y = 50, 50
-    bbox = draw.textbbox((pad_x, pad_y), label, font=f_cat)
-    draw.rectangle(
-        [bbox[0]-14, bbox[1]-10, bbox[2]+14, bbox[3]+10],
-        fill=(200, 20, 20)
-    )
-    draw.text((pad_x, pad_y), label, font=f_cat, fill=(255, 255, 255))
+    # ── Sol ust: kategori (kirmizi kutu yok, sadece beyaz yazi) ──
+    draw.text((50, 50), label, font=f_cat, fill=(255, 255, 255))
 
-    # Sol alt - baslik (THE ROCKULA logosu y=920 civarinda, ona cikmasin)
-    line_h     = 48
-    max_bottom = 900
-    lines      = textwrap.fill(title, width=36).split("\n")[:7]
-    y          = max_bottom - len(lines) * line_h
+    # ── Sol alt: EN baslik + TR ozet ──
+    # THE ROCKULA logosu yaklasik y=930, ona cikmasin
+    # Asagi hizala: metinleri asagidan yukari dogru diz
 
-    for line in lines:
-        draw.text((52, y+2), line, font=f_title, fill=(0, 0, 0))    # golge
-        draw.text((50, y),   line, font=f_title, fill=(255, 255, 255))
-        y += line_h
+    line_h_title = 46
+    line_h_tr    = 44
+    margin_left  = 50
+    logo_y       = 930   # THE ROCKULA'nin y pozisyonu
+
+    # Turkce ozet - ilk 120 karakter, 1 satir
+    tr_text = summary[:120] if summary else ""
+    tr_lines = textwrap.fill(tr_text, width=42).split("\n")[:2]
+
+    # EN baslik
+    en_lines = textwrap.fill(title, width=36).split("\n")[:4]
+
+    # Toplam yukseklik hesapla
+    total_h = (len(en_lines) * line_h_title) + (len(tr_lines) * line_h_tr) + 12  # 12px aralik
+
+    y = logo_y - total_h
+
+    # EN baslik yaz
+    for line in en_lines:
+        draw.text((margin_left+2, y+2), line, font=f_title, fill=(0, 0, 0))
+        draw.text((margin_left,   y),   line, font=f_title, fill=(255, 255, 255))
+        y += line_h_title
+
+    y += 12  # EN ile TR arasi bosluk
+
+    # TR ozet yaz (biraz daha soluk - %80 beyaz)
+    for line in tr_lines:
+        draw.text((margin_left+2, y+2), line, font=f_tr, fill=(0, 0, 0))
+        draw.text((margin_left,   y),   line, font=f_tr, fill=(200, 200, 200))
+        y += line_h_tr
 
     safe = re.sub(r"[^a-z0-9]", "_", title.lower())[:40]
     path = OUTPUT_DIR / f"{safe}_{int(time.time())}.jpg"
