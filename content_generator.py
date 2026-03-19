@@ -1,29 +1,33 @@
-"""Claude API ile Instagram caption üretir."""
+"""Claude API ile Instagram caption uretir."""
 
 import os
 import anthropic
 
-CATEGORY_LABELS = {
-    "turkey_concert": "🇹🇷 TÜRKİYE KONSER",
-    "release":        "🎵 YENİ ÇIKIŞ",
-    "concert":        "🎸 KONSER",
-    "general":        "⚡ METAL HABER",
-}
+client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 def generate_caption(news_item: dict) -> str:
-    client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     category = news_item.get("category", "general")
 
     system = """Sen bir Metal/Rock Instagram hesabının içerik yazarısın.
-Türkiye konserleri için TAMAMEN TÜRKÇE yaz.
-Diğer haberler için İngilizce caption yaz, altına kısa Türkçe özet ekle.
-3-4 cümle, enerjik ton, 15-18 hashtag ekle. Emoji kullan ama abartma."""
+Caption formatı KESINLIKLE şöyle olmalı:
+
+[2-3 cümle İngilizce haber özeti]
+
+🇹🇷 [2-3 cümle Türkçe haber özeti]
+
+#hashtag1 #hashtag2 ... (15-18 hashtag)
+
+Kurallar:
+- Türkiye konserleri için her iki dil de Türkçe olabilir
+- Kaynak bilgisi YAZMA
+- "Yeni haber" veya benzeri giriş cümlesi YAZMA
+- Direkt habere gir
+- 15-18 hashtag ekle, metal/rock ile ilgili"""
 
     prompt = f"""Başlık: {news_item['title']}
-Kaynak: {news_item['source']}
 Özet: {news_item['summary']}
 
-Bu haberi Instagram gönderisine dönüştür."""
+Bu haberi Instagram caption formatında yaz."""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
