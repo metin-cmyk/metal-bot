@@ -1,46 +1,28 @@
-"""Claude API ile caption ve Turkce ozet uretir."""
-
-import os
-import re
-import anthropic
+import os, re, anthropic
 
 client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
 def _clean(text):
     text = re.sub(r'<[^>]+>', ' ', text)
     text = re.sub(r'&[a-z]+;', ' ', text)
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+    return re.sub(r'\s+', ' ', text).strip()
 
 def generate_caption(news_item: dict) -> dict:
-    """
-    Returns: {
-        "caption": Instagram metni,
-        "tr_summary": Gorsel icin kisa Turkce ozet (max 1 cumle)
-    }
-    """
     title   = _clean(news_item.get("title", ""))
     summary = _clean(news_item.get("summary", ""))
 
     system = """Sen bir Metal/Rock Instagram hesabının içerik yazarısın.
-Senden iki şey isteniyor:
+Yanıtını TAM OLARAK şu formatta ver, başka hiçbir şey ekleme:
 
-1. CAPTION: Instagram gönderisi
-Format:
-[2-3 cümle İngilizce haber]
+CAPTION:
+[2-3 cümle İngilizce haber özeti]
 
 🇹🇷 [2-3 cümle Türkçe özet]
 
-#hashtag1 #hashtag2 ... (15-18 hashtag)
-
-2. TR_OZET: Görsel üzerine yazılacak çok kısa Türkçe özet (MAX 10 kelime, 1 cümle)
-
-Yanıtını KESINLIKLE şu formatta ver:
-CAPTION:
-[caption metni]
-
+#hashtag1 #hashtag2 #hashtag3 (15-18 hashtag)
+---
 TR_OZET:
-[kısa Türkçe özet]"""
+[Maksimum 8 kelime Türkçe özet - görsel için]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -51,16 +33,19 @@ TR_OZET:
 
     response = msg.content[0].text.strip()
 
-    # Parse
-    caption   = ""
+    # Parse et
+    caption    = ""
     tr_summary = ""
 
-    if "CAPTION:" in response and "TR_OZET:" in response:
-        parts      = response.split("TR_OZET:")
-        tr_summary = parts[1].strip()
+    if "---\nTR_OZET:" in response:
+        parts      = response.split("---\nTR_OZET:")
         caption    = parts[0].replace("CAPTION:", "").strip()
+        tr_summary = parts[1].strip()
+    elif "TR_OZET:" in response:
+        parts      = response.split("TR_OZET:")
+        caption    = parts[0].replace("CAPTION:", "").strip()
+        tr_summary = parts[1].strip()
     else:
-        caption    = response
-        tr_summary = ""
+        caption = response.replace("CAPTION:", "").strip()
 
     return {"caption": caption, "tr_summary": tr_summary}
