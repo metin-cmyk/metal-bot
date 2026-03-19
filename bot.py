@@ -1,7 +1,6 @@
 """
 Metal/Rock Haber Botu — Sadece Telegram versiyonu
-Günde 2 kez haber bulur, görsel + caption hazırlar, Telegram'a gönderir.
-Sen Telegram'dan alıp Instagram'a manuel yapıştırırsın.
+Gece 00:00-09:00 arası uyur, diğer saatlerde her 2 saatte bir haber gönderir.
 """
 
 import os
@@ -11,6 +10,7 @@ import schedule
 import time
 import feedparser
 from pathlib import Path
+from datetime import datetime
 
 from content_generator import generate_caption
 from image_generator import create_image
@@ -108,11 +108,18 @@ def run():
     except Exception as e:
         log.error(f"Hata: {e}", exc_info=True)
 
-def main():
-    log.info("Bot başlıyor... Sabah 10:00 ve akşam 19:00'da çalışacak.")
+def run_if_allowed():
+    """Gece 00:00-09:00 arası çalışmaz."""
+    hour = datetime.now().hour
+    if 0 <= hour < 9:
+        log.info(f"Gece modu — saat {hour}:00, atlanıyor.")
+        return
+    run()
 
-    schedule.every().day.at("10:00").do(run)
-    schedule.every().day.at("19:00").do(run)
+def main():
+    log.info("Bot başlıyor... Her 2 saatte bir kontrol eder, gece 00:00-09:00 arası uyur.")
+
+    schedule.every(2).hours.do(run_if_allowed)
 
     if os.getenv("RUN_NOW", "false") == "true":
         run()
