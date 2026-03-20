@@ -5,7 +5,7 @@ from io import BytesIO
 
 OUTPUT_DIR = Path("images")
 OUTPUT_DIR.mkdir(exist_ok=True)
-SIZE = (1080, 1350)
+SIZE = (1080, 1350)  # 4:5 Instagram dikey format
 
 OVERLAY_PATH   = Path("therockula-post-overlay.png")
 FONT_BOLD_PATH = Path("BarlowCondensed-SemiBold.ttf")
@@ -42,11 +42,27 @@ def _fetch_image(url):
         return None
 
 def _prepare_bg(photo):
+    """
+    Görseli oranını bozmadan 1080x1350'ye kırp.
+    Önce genişliği 1080'e sığdır, sonra ortadan 1350 yüksekliğinde kırp.
+    """
     w, h = photo.size
-    s = min(w, h)
-    img = photo.crop(((w-s)//2, (h-s)//2, (w+s)//2, (h+s)//2))
-    img = img.resize(SIZE, Image.LANCZOS)
-    img = ImageEnhance.Brightness(img).enhance(0.65)
+    # Genişliği 1080'e göre ölçekle
+    new_w = 1080
+    new_h = int(h * new_w / w)
+
+    # Eğer yükseklik 1350'den kısa kalırsa yüksekliğe göre ölçekle
+    if new_h < 1350:
+        new_h = 1350
+        new_w = int(w * new_h / h)
+
+    img = photo.resize((new_w, new_h), Image.LANCZOS)
+
+    # Ortadan kırp
+    left = (new_w - 1080) // 2
+    top  = (new_h - 1350) // 2
+    img  = img.crop((left, top, left + 1080, top + 1350))
+    img  = ImageEnhance.Brightness(img).enhance(0.65)
     return img
 
 def _blend(bg, overlay):
@@ -70,21 +86,23 @@ def create_image(news_item: dict) -> Path:
     tr_text  = news_item.get("tr_summary", "")
     grup_adi = news_item.get("grup_adi", "")
 
-    f_grup  = _font(80, bold=True)   # 60pt — grup adı
-    f_title = _font(40, bold=True)   # 30pt — başlık
-    f_tr    = _font(40, bold=False)  # 30pt — TR özet
+    f_grup  = _font(80, bold=True)
+    f_title = _font(40, bold=True)
+    f_tr    = _font(40, bold=False)
 
-    # ── Sol üst: Grup adı (beyaz, kutu yok) ──
+    # Sol üst: Grup adı
     if grup_adi and grup_adi != "NEWS":
         draw.text((50, 50), grup_adi.upper(), font=f_grup, fill=(255, 255, 255))
 
-    # ── Sol alt: EN başlık + TR özet ──
-    logo_y       = 1240
-    line_h_title = 46
+    # Sol alt: yazılar — THE ROCKULA y=1270 civarında
+    # Biraz yukarı aldım (1150 yerine 1100) ve genişlik artırıldı (width=42)
+    logo_y       = 1100
+    line_h_title = 48
     line_h_tr    = 44
+    max_width    = 42   # daha geniş satır
 
-    en_lines = textwrap.fill(title, width=36).split("\n")[:4]
-    tr_lines = textwrap.fill(tr_text, width=42).split("\n")[:2] if tr_text else []
+    en_lines = textwrap.fill(title, width=max_width).split("\n")[:4]
+    tr_lines = textwrap.fill(tr_text, width=max_width+4).split("\n")[:2] if tr_text else []
 
     total_h = len(en_lines)*line_h_title + (12 + len(tr_lines)*line_h_tr if tr_lines else 0)
     y = logo_y - total_h
