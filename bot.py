@@ -93,8 +93,25 @@ def categorize(item):
     if is_concert: return "concert"
     return "general"
 
-def run():
-    log.info("Haberler aranıyor...")
+def send_one(selected, posted):
+    """Tek bir haberi işle ve gönder."""
+    try:
+        result   = generate_caption(selected)
+        selected["tr_summary"] = result["tr_summary"]
+        selected["grup_adi"]   = result["grup_adi"]
+        image_path = create_image(selected)
+        send_to_telegram(image_path, result["caption"], selected)
+        posted.add(selected["link"])
+        save_posted(posted)
+        log.info(f"Gonderildi: {selected['title']}")
+        return True
+    except Exception as e:
+        log.error(f"Hata: {e}", exc_info=True)
+        return False
+
+def run(batch=1):
+    """batch=10 ile ilk çalışmada 10 haber gönderir."""
+    log.info(f"Haberler aranıyor... (batch={batch})")
     posted = load_posted()
     items  = [i for i in fetch_news() if i["link"] not in posted]
 
@@ -107,31 +124,34 @@ def run():
         item["category"] = categorize(item)
     items.sort(key=lambda x: priority[x["category"]])
 
-    selected = items[0]
-    log.info(f"Secilen: {selected['title']}")
+    # Kaç haber gönderileceğini belirle
+    count = min(batch, len(items))
+    log.info(f"Toplam {len(items)} yeni haber var, {count} tanesi gönderilecek.")
 
-    try:
-        result   = generate_caption(selected)
-        selected["tr_summary"] = result["tr_summary"]
-        selected["grup_adi"]   = result["grup_adi"]
-        image_path = create_image(selected)
-        send_to_telegram(image_path, result["caption"], selected)
-        posted.add(selected["link"])
-        save_posted(posted)
-        log.info("Gonderildi!")
-    except Exception as e:
-        log.error(f"Hata: {e}", exc_info=True)
+    for i in range(count):
+        selected = items[i]
+        log.info(f"[{i+1}/{count}] {selected['title']}")
+        send_one(selected, posted)
+        if i < count - 1:
+            time.sleep(5)  # Haberler arası 5 saniye bekle
 
 def run_if_allowed():
+    """Normal mod — her seferinde 1 haber."""
     if 0 <= datetime.now().hour < 9:
         return
-    run()
+    run(batch=1)
 
 def main():
     log.info("Bot basliyor...")
-    schedule.every(2).hours.do(run_if_allowed)
+
+    # İlk çalışmada kaç haber gönderilsin?
+    batch = int(os.getenv("BATCH_SIZE", "1"))
+
     if os.getenv("RUN_NOW", "false") == "true":
-        run()
+        run(batch=batch)
+
+    schedule.every(2).hours.do(run_if_allowed)
+
     while True:
         schedule.run_pending()
         time.sleep(30)
