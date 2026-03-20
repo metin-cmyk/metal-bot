@@ -60,13 +60,13 @@ def _parse_date(entry):
     except:
         return datetime.now().astimezone()
 
-def fetch_news():
+def fetch_news(days=10):
     items = []
-    cutoff = datetime.now().astimezone() - timedelta(days=10)
+    cutoff = datetime.now().astimezone() - timedelta(days=days)
     for url in RSS_FEEDS:
         try:
             feed = feedparser.parse(url)
-            for entry in feed.entries[:20]:
+            for entry in feed.entries[:30]:
                 pub = _parse_date(entry)
                 if pub < cutoff:
                     continue
@@ -105,10 +105,10 @@ def send_one(selected, posted):
         log.error("Hata: %s" % e, exc_info=True)
         return False
 
-def run(batch=1):
-    log.info("Haberler aranıyor... batch=%d" % batch)
+def run(batch=None, days=10):
+    log.info("Haberler aranıyor... days=%d" % days)
     posted = load_posted()
-    items  = [i for i in fetch_news() if i["link"] not in posted]
+    items  = [i for i in fetch_news(days=days) if i["link"] not in posted]
 
     if not items:
         log.info("Yeni haber yok.")
@@ -119,7 +119,8 @@ def run(batch=1):
         item["category"] = categorize(item)
     items.sort(key=lambda x: priority[x["category"]])
 
-    count = min(batch, len(items))
+    # batch=None ise tum haberleri gonder
+    count = len(items) if batch is None else min(batch, len(items))
     log.info("%d yeni haber var, %d gonderilecek." % (len(items), count))
 
     for i in range(count):
@@ -127,10 +128,10 @@ def run(batch=1):
         if i < count - 1:
             time.sleep(5)
 
-def run_if_allowed(batch=1):
+def run_if_allowed():
     if 0 <= datetime.now().hour < 9:
         return
-    run(batch)
+    run(batch=1, days=10)
 
 def main():
     log.info("Bot basliyor...")
@@ -138,10 +139,12 @@ def main():
     set_run_callback(run)
     start_command_listener()
 
+    # Ilk calisma: tum yeni haberleri gonder
     if os.getenv("RUN_NOW", "false") == "true":
-        run(batch=5)
+        run(batch=None, days=10)
 
-    schedule.every(2).hours.do(lambda: run_if_allowed(batch=1))
+    # Her 2 saatte bir 1 haber
+    schedule.every(2).hours.do(run_if_allowed)
 
     while True:
         schedule.run_pending()
