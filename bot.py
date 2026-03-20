@@ -26,6 +26,13 @@ RSS_FEEDS = [
     "https://feeds.feedburner.com/Metalsucks",
     "https://decibelmagazine.com/feed",
     "https://www.revolvermag.com/rss.xml",
+    # Turkce kaynaklar
+    "https://turkrockfm.com/feed",
+    "https://kritikzine.com/feed",
+    "https://www.rock-vault.com/feed",
+    # Ekstra uluslararasi
+    "https://rocksound.tv/news/feed",
+    "https://ultimateclassicrock.com/feed",
 ]
 
 TURKEY_KEYWORDS  = ["turkey", "turkiye", "istanbul", "ankara", "izmir", "konser", "tour"]
