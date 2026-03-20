@@ -1,4 +1,4 @@
-import os, logging, threading, requests
+import os, json, logging, threading, requests
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -35,11 +35,14 @@ def send_to_telegram(image_path, caption, news_item):
     r.raise_for_status()
 
 def _send_message(text):
-    requests.post(
-        "https://api.telegram.org/bot%s/sendMessage" % TELEGRAM_TOKEN,
-        data={"chat_id": TELEGRAM_CHAT_ID, "text": text},
-        timeout=10,
-    )
+    try:
+        requests.post(
+            "https://api.telegram.org/bot%s/sendMessage" % TELEGRAM_TOKEN,
+            data={"chat_id": TELEGRAM_CHAT_ID, "text": text},
+            timeout=10,
+        )
+    except Exception as e:
+        log.warning("Mesaj gonderilemedi: %s" % e)
 
 def _poll_commands():
     global _last_offset
@@ -58,27 +61,51 @@ def _poll_commands():
 
                 if text == "/start":
                     _send_message(
-                        "Merhaba! Metal Haber Bot aktif.\n\n"
+                        "Metal Haber Bot aktif!\n\n"
                         "Komutlar:\n"
-                        "/haber - 1 haber gonder\n"
-                        "/haber5 - 5 haber gonder\n"
-                        "/haber10 - 10 haber gonder\n"
+                        "/haber - 1 yeni haber\n"
+                        "/haber5 - 5 yeni haber\n"
+                        "/haber10 - 10 yeni haber\n"
+                        "/tumhaber - tum yeni haberleri gonder\n"
+                        "/son3 - son 3 gunun haberleri\n"
+                        "/son7 - son 7 gunun haberleri\n"
+                        "/son10 - son 10 gunun haberleri\n"
                         "/durum - bot durumu"
                     )
+
                 elif text == "/haber":
-                    _send_message("1 haber hazirlanıyor...")
-                    threading.Thread(target=_run_callback, args=(1,), daemon=True).start()
+                    _send_message("1 haber hazırlanıyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": 1, "days": 10}, daemon=True).start()
+
                 elif text == "/haber5":
-                    _send_message("5 haber hazirlanıyor...")
-                    threading.Thread(target=_run_callback, args=(5,), daemon=True).start()
+                    _send_message("5 haber hazırlanıyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": 5, "days": 10}, daemon=True).start()
+
                 elif text == "/haber10":
-                    _send_message("10 haber hazirlanıyor...")
-                    threading.Thread(target=_run_callback, args=(10,), daemon=True).start()
+                    _send_message("10 haber hazırlanıyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": 10, "days": 10}, daemon=True).start()
+
+                elif text == "/tumhaber":
+                    _send_message("Tum yeni haberler gonderiliyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": None, "days": 10}, daemon=True).start()
+
+                elif text == "/son3":
+                    _send_message("Son 3 gunun haberleri gonderiliyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": None, "days": 3}, daemon=True).start()
+
+                elif text == "/son7":
+                    _send_message("Son 7 gunun haberleri gonderiliyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": None, "days": 7}, daemon=True).start()
+
+                elif text == "/son10":
+                    _send_message("Son 10 gunun haberleri gonderiliyor...")
+                    threading.Thread(target=_run_callback, kwargs={"batch": None, "days": 10}, daemon=True).start()
+
                 elif text == "/durum":
-                    import json
                     posted_file = Path("posted.json")
                     count = len(json.loads(posted_file.read_text())) if posted_file.exists() else 0
                     _send_message("Bot calisiyor!\nToplam gonderilen: %d haber\nSonraki: 2 saatte bir" % count)
+
         except Exception as e:
             log.warning("Polling hatasi: %s" % e)
 
