@@ -17,11 +17,17 @@ log = logging.getLogger(__name__)
 POSTED_FILE = Path("posted.json")
 
 RSS_FEEDS = [
+    # Orijinal kaynaklar
     "https://www.blabbermouth.net/news/feed/",
     "https://www.loudwire.com/feed/",
     "https://www.kerrang.com/feed",
     "https://www.metalinjection.net/feed",
     "https://metalstorm.net/rss/news.xml",
+    # Yeni kaynaklar
+    "https://www.loudersound.com/feeds.xml",          # Metal Hammer + Classic Rock
+    "https://feeds.feedburner.com/Metalsucks",        # MetalSucks
+    "https://decibelmagazine.com/feed",               # Decibel Magazine
+    "https://www.revolvermag.com/rss.xml",            # Revolver Magazine
 ]
 
 TURKEY_KEYWORDS = ["turkey", "turkiye", "istanbul", "ankara", "izmir", "konser", "tour"]
@@ -42,7 +48,6 @@ def _clean(text):
 def _get_image(entry):
     if hasattr(entry, "media_content") and entry.media_content:
         return entry.media_content[0].get("url")
-    # summary icinde img ara
     summary = entry.get("summary", "")
     match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary)
     if match:
@@ -74,7 +79,7 @@ def fetch_news():
                     "published": pub,
                 })
         except Exception as e:
-            log.warning(f"RSS hatasi: {e}")
+            log.warning(f"RSS hatasi ({url}): {e}")
     items.sort(key=lambda x: x["published"], reverse=True)
     return items
 
@@ -108,14 +113,10 @@ def run():
     try:
         result     = generate_caption(selected)
         caption    = result["caption"]
-        tr_summary = result["tr_summary"]
-
-        # Turkce ozeti gorsele ekle
-        selected["tr_summary"] = tr_summary
-
+        tr_baslik  = result["tr_summary"]
+        selected["tr_summary"] = tr_baslik
         image_path = create_image(selected)
         send_to_telegram(image_path, caption, selected)
-
         posted.add(selected["link"])
         save_posted(posted)
         log.info("Gonderildi!")
@@ -128,7 +129,7 @@ def run_if_allowed():
     run()
 
 def main():
-    log.info("Bot basliyor...")
+    log.info("Bot basliyor... Her 2 saatte bir, gece 00-09 arasi uyur.")
     schedule.every(2).hours.do(run_if_allowed)
     if os.getenv("RUN_NOW", "false") == "true":
         run()
