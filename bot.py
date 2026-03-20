@@ -17,20 +17,20 @@ log = logging.getLogger(__name__)
 POSTED_FILE = Path("posted.json")
 
 RSS_FEEDS = [
-    # Orijinal kaynaklar
     "https://www.blabbermouth.net/news/feed/",
     "https://www.loudwire.com/feed/",
     "https://www.kerrang.com/feed",
     "https://www.metalinjection.net/feed",
     "https://metalstorm.net/rss/news.xml",
-    # Yeni kaynaklar
-    "https://www.loudersound.com/feeds.xml",          # Metal Hammer + Classic Rock
-    "https://feeds.feedburner.com/Metalsucks",        # MetalSucks
-    "https://decibelmagazine.com/feed",               # Decibel Magazine
-    "https://www.revolvermag.com/rss.xml",            # Revolver Magazine
+    "https://www.loudersound.com/feeds.xml",
+    "https://feeds.feedburner.com/Metalsucks",
+    "https://decibelmagazine.com/feed",
+    "https://www.revolvermag.com/rss.xml",
 ]
 
 TURKEY_KEYWORDS = ["turkey", "turkiye", "istanbul", "ankara", "izmir", "konser", "tour"]
+RELEASE_KEYWORDS = ["album", "single", "ep", "release", "out now", "stream"]
+CONCERT_KEYWORDS = ["tour", "concert", "festival", "live", "show", "dates"]
 
 def load_posted():
     if POSTED_FILE.exists():
@@ -84,13 +84,13 @@ def fetch_news():
     return items
 
 def categorize(item):
-    text = (item["title"] + item["summary"]).lower()
-    if any(k in text for k in TURKEY_KEYWORDS):
-        return "turkey_concert"
-    if any(k in text for k in ["album", "single", "release", "out now"]):
-        return "release"
-    if any(k in text for k in ["tour", "concert", "festival"]):
-        return "concert"
+    text = (item["title"] + " " + item["summary"]).lower()
+    is_turkey  = any(k in text for k in TURKEY_KEYWORDS)
+    is_release = any(k in text for k in RELEASE_KEYWORDS)
+    is_concert = any(k in text for k in CONCERT_KEYWORDS)
+    if is_turkey:  return "turkey_concert"
+    if is_release: return "release"
+    if is_concert: return "concert"
     return "general"
 
 def run():
@@ -111,12 +111,11 @@ def run():
     log.info(f"Secilen: {selected['title']}")
 
     try:
-        result     = generate_caption(selected)
-        caption    = result["caption"]
-        tr_baslik  = result["tr_summary"]
-        selected["tr_summary"] = tr_baslik
+        result   = generate_caption(selected)
+        selected["tr_summary"] = result["tr_summary"]
+        selected["grup_adi"]   = result["grup_adi"]
         image_path = create_image(selected)
-        send_to_telegram(image_path, caption, selected)
+        send_to_telegram(image_path, result["caption"], selected)
         posted.add(selected["link"])
         save_posted(posted)
         log.info("Gonderildi!")
@@ -129,7 +128,7 @@ def run_if_allowed():
     run()
 
 def main():
-    log.info("Bot basliyor... Her 2 saatte bir, gece 00-09 arasi uyur.")
+    log.info("Bot basliyor...")
     schedule.every(2).hours.do(run_if_allowed)
     if os.getenv("RUN_NOW", "false") == "true":
         run()
