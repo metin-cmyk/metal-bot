@@ -51,7 +51,7 @@ def _prepare_bg(photo):
     new_w = 1080
     new_h = int(h * new_w / w)
 
-    # Eğer yükseklik 1350'den kısa kalırsa yüksekliğe göre ölçekle
+    # Eğer yükseklik 1350'den akısa kalırsa yüksekliğe göre ölçekle
     if new_h < 1350:
         new_h = 1350
         new_w = int(w * new_h / h)
