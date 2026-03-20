@@ -96,7 +96,7 @@ def create_image(news_item: dict) -> Path:
 
     # Sol alt: yazılar — THE ROCKULA y=1270 civarında
     # Biraz yukarı aldım (1150 yerine 1100) ve genişlik artırıldı (width=42)
-    logo_y       = 1100
+    logo_y       = 1200
     line_h_title = 48
     line_h_tr    = 44
     max_width    = 42   # daha geniş satır
