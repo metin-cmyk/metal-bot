@@ -11,20 +11,6 @@ OVERLAY_PATH   = Path("therockula-post-overlay.png")
 FONT_BOLD_PATH = Path("BarlowCondensed-SemiBold.ttf")
 FONT_REG_PATH  = Path("BarlowCondensed-Regular.ttf")
 
-CATEGORY_LABELS = {
-    "turkey_concert": "KONSER",
-    "release":        "YENI CIKIS",
-    "concert":        "KONSER",
-    "general":        "METAL HABER",
-}
-
-def _clean(text):
-    """HTML etiketlerini ve gereksiz boslukları temizle."""
-    text = re.sub(r'<[^>]+>', ' ', text)          # HTML tags
-    text = re.sub(r'&[a-z]+;', ' ', text)         # HTML entities
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
 def _font(size, bold=True):
     path = FONT_BOLD_PATH if bold else FONT_REG_PATH
     if path.exists():
@@ -35,14 +21,23 @@ def _font(size, bold=True):
             return ImageFont.truetype(p, size)
     return ImageFont.load_default()
 
+def _clean(text):
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = re.sub(r'&[a-z]+;', ' ', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
 def _fetch_image(url):
     if not url:
         return None
     try:
         r = requests.get(url, timeout=8, headers={"User-Agent": "Mozilla/5.0"})
         r.raise_for_status()
-        img = Image.open(BytesIO(r.content)).convert("RGB")
-        return img
+        img = Image.open(BytesIO(r.content))
+        if img.mode == "RGBA":
+            bg = Image.new("RGB", img.size, (15, 15, 15))
+            bg.paste(img, mask=img.split()[3])
+            return bg
+        return img.convert("RGB")
     except:
         return None
 
@@ -61,66 +56,50 @@ def _blend(bg, overlay):
     out    = 1.0 - (1.0 - bg_arr) * (1.0 - ov_arr)
     return Image.fromarray((np.clip(out, 0, 1) * 255).astype(np.uint8))
 
-def _extract_image(entry_dict):
-    """RSS entry'den gorsel URL'sini bul."""
-    # Direkt image_url
-    url = entry_dict.get("image_url")
-    if url:
-        return url
-    # Summary icindeki img src
-    summary = entry_dict.get("summary", "")
-    match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', summary)
-    if match:
-        return match.group(1)
-    return None
-
 def create_image(news_item: dict) -> Path:
-    # Gorsel URL'sini bul
-    image_url = _extract_image(news_item)
-    photo     = _fetch_image(image_url)
-    bg        = _prepare_bg(photo) if photo else Image.new("RGB", SIZE, (15, 15, 15))
+    photo = _fetch_image(news_item.get("image_url"))
+    bg    = _prepare_bg(photo) if photo else Image.new("RGB", SIZE, (15, 15, 15))
 
-    # Overlay
     if OVERLAY_PATH.exists():
         result = _blend(bg, Image.open(OVERLAY_PATH).convert("RGB"))
     else:
         result = bg
 
     draw     = ImageDraw.Draw(result)
-    category = news_item.get("category", "general")
-    label    = CATEGORY_LABELS.get(category, "METAL HABER")
     title    = _clean(news_item.get("title", ""))
-    summary  = news_item.get("tr_summary") or _clean(news_item.get("summary", ""))
+    tr_text  = news_item.get("tr_summary", "")
+    grup_adi = news_item.get("grup_adi", "")
 
-    f_cat   = _font(60, bold=True)   # 45pt kategori
-    f_title = _font(40, bold=True)   # 30pt baslik
-    f_tr    = _font(40, bold=False)  # 30pt TR ozet
+    f_grup  = _font(80, bold=True)   # 60pt — grup adı
+    f_title = _font(40, bold=True)   # 30pt — başlık
+    f_tr    = _font(40, bold=False)  # 30pt — TR özet
 
-    # Sol ust: kategori (sadece beyaz yazi, kutu yok)
-    draw.text((50, 50), label, font=f_cat, fill=(255, 255, 255))
+    # ── Sol üst: Grup adı (beyaz, kutu yok) ──
+    if grup_adi and grup_adi != "NEWS":
+        draw.text((50, 50), grup_adi.upper(), font=f_grup, fill=(255, 255, 255))
 
-    # Sol alt: EN baslik + TR ozet, THE ROCKULA'nin ustune cikmasin
+    # ── Sol alt: EN başlık + TR özet ──
     logo_y       = 930
     line_h_title = 46
     line_h_tr    = 44
 
     en_lines = textwrap.fill(title, width=36).split("\n")[:4]
-    tr_lines = textwrap.fill(summary[:150], width=42).split("\n")[:2]
+    tr_lines = textwrap.fill(tr_text, width=42).split("\n")[:2] if tr_text else []
 
-    total_h = len(en_lines)*line_h_title + 12 + len(tr_lines)*line_h_tr
+    total_h = len(en_lines)*line_h_title + (12 + len(tr_lines)*line_h_tr if tr_lines else 0)
     y = logo_y - total_h
 
     for line in en_lines:
-        draw.text((52, y+2), line, font=f_title, fill=(0,0,0))
-        draw.text((50, y),   line, font=f_title, fill=(255,255,255))
+        draw.text((52, y+2), line, font=f_title, fill=(0, 0, 0))
+        draw.text((50, y),   line, font=f_title, fill=(255, 255, 255))
         y += line_h_title
 
-    y += 12
-
-    for line in tr_lines:
-        draw.text((52, y+2), line, font=f_tr, fill=(0,0,0))
-        draw.text((50, y),   line, font=f_tr, fill=(200,200,200))
-        y += line_h_tr
+    if tr_lines:
+        y += 12
+        for line in tr_lines:
+            draw.text((52, y+2), line, font=f_tr, fill=(0, 0, 0))
+            draw.text((50, y),   line, font=f_tr, fill=(200, 200, 200))
+            y += line_h_tr
 
     safe = re.sub(r"[^a-z0-9]", "_", title.lower())[:40]
     path = OUTPUT_DIR / f"{safe}_{int(time.time())}.jpg"
