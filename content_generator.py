@@ -12,17 +12,17 @@ def generate_caption(news_item: dict) -> dict:
     summary = _clean(news_item.get("summary", ""))
 
     system = """Sen bir Metal/Rock Instagram hesabının içerik yazarısın.
-Yanıtını TAM OLARAK şu formatta ver, başka hiçbir şey ekleme:
+Yanıtını TAM OLARAK şu formatta ver:
 
 CAPTION:
-[2-3 cümle İngilizce haber özeti]
+🇬🇧 [2-3 cümle İngilizce haber özeti]
 
-🇹🇷 [2-3 cümle Türkçe özet]
+🇹🇷 [2-3 cümle Türkçe özet — İngilizce ile AYNI bilgiyi içermeli]
 
-#hashtag1 #hashtag2 #hashtag3 (15-18 hashtag)
+#hashtag1 #hashtag2 (15-18 hashtag)
 ---
-TR_OZET:
-[Maksimum 8 kelime Türkçe özet - görsel için]"""
+TR_BASLIK:
+[Haber başlığının Türkçe çevirisi — maksimum 8 kelime]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -33,19 +33,18 @@ TR_OZET:
 
     response = msg.content[0].text.strip()
 
-    # Parse et
-    caption    = ""
-    tr_summary = ""
+    caption   = ""
+    tr_baslik = ""
 
-    if "---\nTR_OZET:" in response:
-        parts      = response.split("---\nTR_OZET:")
-        caption    = parts[0].replace("CAPTION:", "").strip()
-        tr_summary = parts[1].strip()
-    elif "TR_OZET:" in response:
-        parts      = response.split("TR_OZET:")
-        caption    = parts[0].replace("CAPTION:", "").strip()
-        tr_summary = parts[1].strip()
+    if "---\nTR_BASLIK:" in response:
+        parts     = response.split("---\nTR_BASLIK:")
+        caption   = parts[0].replace("CAPTION:", "").strip()
+        tr_baslik = parts[1].strip()
+    elif "TR_BASLIK:" in response:
+        parts     = response.split("TR_BASLIK:")
+        caption   = parts[0].replace("CAPTION:", "").strip()
+        tr_baslik = parts[1].strip()
     else:
         caption = response.replace("CAPTION:", "").strip()
 
-    return {"caption": caption, "tr_summary": tr_summary}
+    return {"caption": caption, "tr_summary": tr_baslik}
