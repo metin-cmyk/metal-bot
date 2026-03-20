@@ -21,10 +21,13 @@ CAPTION:
 
 #hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5
 
-(Sadece 5 hashtag — niş ve ilgili olanlar, örn: #metal #heavymetal #newmusic #metalinjection #progressiverock)
+(Sadece 5 hashtag — niş ve ilgili olanlar)
 ---
 TR_BASLIK:
-[Haber başlığının Türkçe çevirisi — maksimum 8 kelime]"""
+[Haber başlığının Türkçe çevirisi — maksimum 8 kelime]
+---
+GRUP_ADI:
+[Haberdeki ana grup veya sanatçı adı — sadece isim, örn: Metallica veya Iron Maiden & Judas Priest. Birden fazla varsa en önemlisi. Grup yoksa NEWS yaz.]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
@@ -37,16 +40,21 @@ TR_BASLIK:
 
     caption   = ""
     tr_baslik = ""
+    grup_adi  = ""
 
-    if "---\nTR_BASLIK:" in response:
-        parts     = response.split("---\nTR_BASLIK:")
-        caption   = parts[0].replace("CAPTION:", "").strip()
-        tr_baslik = parts[1].strip()
-    elif "TR_BASLIK:" in response:
-        parts     = response.split("TR_BASLIK:")
-        caption   = parts[0].replace("CAPTION:", "").strip()
-        tr_baslik = parts[1].strip()
-    else:
-        caption = response.replace("CAPTION:", "").strip()
+    # Parse
+    parts = response.split("---")
+    for i, part in enumerate(parts):
+        part = part.strip()
+        if part.startswith("CAPTION:"):
+            caption = part.replace("CAPTION:", "").strip()
+        elif part.startswith("TR_BASLIK:"):
+            tr_baslik = part.replace("TR_BASLIK:", "").strip()
+        elif part.startswith("GRUP_ADI:"):
+            grup_adi = part.replace("GRUP_ADI:", "").strip()
 
-    return {"caption": caption, "tr_summary": tr_baslik}
+    return {
+        "caption":    caption,
+        "tr_summary": tr_baslik,
+        "grup_adi":   grup_adi,
+    }
