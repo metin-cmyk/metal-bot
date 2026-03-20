@@ -19,14 +19,16 @@ CAPTION:
 
 🇹🇷 [2-3 cümle Türkçe özet — İngilizce ile AYNI bilgiyi içermeli]
 
-#hashtag1 #hashtag2 (15-18 hashtag)
+#hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5
+
+(Sadece 5 hashtag — niş ve ilgili olanlar, örn: #metal #heavymetal #newmusic #metalinjection #progressiverock)
 ---
 TR_BASLIK:
 [Haber başlığının Türkçe çevirisi — maksimum 8 kelime]"""
 
     msg = client.messages.create(
         model="claude-sonnet-4-20250514",
-        max_tokens=1000,
+        max_tokens=800,
         system=system,
         messages=[{"role": "user", "content": f"Başlık: {title}\nÖzet: {summary[:400]}"}]
     )
