@@ -5,7 +5,7 @@ from io import BytesIO
 
 OUTPUT_DIR = Path("images")
 OUTPUT_DIR.mkdir(exist_ok=True)
-SIZE = (1080, 1080)
+SIZE = (1080, 1350)
 
 OVERLAY_PATH   = Path("therockula-post-overlay.png")
 FONT_BOLD_PATH = Path("BarlowCondensed-SemiBold.ttf")
@@ -79,7 +79,7 @@ def create_image(news_item: dict) -> Path:
         draw.text((50, 50), grup_adi.upper(), font=f_grup, fill=(255, 255, 255))
 
     # ── Sol alt: EN başlık + TR özet ──
-    logo_y       = 930
+    logo_y       = 1240
     line_h_title = 46
     line_h_tr    = 44
 
