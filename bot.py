@@ -135,22 +135,22 @@ def run(batch=1):
         if i < count - 1:
             time.sleep(5)  # Haberler arası 5 saniye bekle
 
-def run_if_allowed():
+def run_if_allowed(batch=1):
     """Normal mod — her seferinde 1 haber."""
     if 0 <= datetime.now().hour < 9:
         return
-    run(batch=1)
+    run(batch=batch)
 
 def main():
     log.info("Bot basliyor...")
 
     # İlk çalışmada kaç haber gönderilsin?
-    batch = int(os.getenv("BATCH_SIZE", "1"))
+    batch = 5
 
     if os.getenv("RUN_NOW", "false") == "true":
         run(batch=batch)
 
-    schedule.every(2).hours.do(run_if_allowed)
+    schedule.every(2).hours.do(lambda: run_if_allowed(batch=1))
 
     while True:
         schedule.run_pending()
